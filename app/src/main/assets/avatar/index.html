@@ -1,0 +1,152 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<style>
+:root{--p:#a85bff;--p2:#7a3cff;--glass:rgba(38,18,68,.55);--line:rgba(190,130,255,.5);--tx:#f6eeff}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;width:100%;height:100%;overflow:hidden;background:radial-gradient(ellipse at 50% 30%,#3a1d63,#100b20 70%);font-family:system-ui,-apple-system,Roboto,sans-serif;color:var(--tx)}
+canvas{position:fixed;inset:0;width:100%!important;height:100%!important;z-index:0}
+#info{display:none}
+#hud{position:fixed;inset:0;z-index:10;display:flex;flex-direction:column;pointer-events:none}
+#hud *{pointer-events:auto}
+.glass{background:var(--glass);border:1px solid var(--line);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);box-shadow:0 0 18px rgba(150,80,255,.25) inset,0 4px 18px rgba(0,0,0,.35)}
+svg{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer}
+/* header */
+#top{display:flex;align-items:center;gap:8px;padding:8px 10px 0 10px;pointer-events:none}
+#logo{display:flex;align-items:center;gap:6px;font-weight:800;font-style:italic;font-size:19px;white-space:nowrap;letter-spacing:.5px;text-shadow:0 0 14px #a85bff}
+#logo svg{width:28px;height:28px;stroke:#d9b8ff;flex:none}
+#ver{font-size:13px;font-weight:700;padding:3px 10px;border-radius:14px;color:#e5cfff}
+#sp{flex:1}
+#status{display:flex;align-items:center;gap:7px;padding:7px 13px;border-radius:20px;font-size:14px;font-weight:600;max-width:42vw;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#dot{width:10px;height:10px;border-radius:50%;background:#35e05a;box-shadow:0 0 8px #35e05a;flex:none}
+#gear{width:42px;height:42px;display:grid;place-items:center;border-radius:50%}
+#sub{padding:3px 14px;font-size:11.5px;color:#cfa9ff;min-height:18px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;pointer-events:none;text-shadow:0 1px 4px #000}
+/* middle with rails */
+#mid{flex:1;position:relative;min-height:0;pointer-events:none}
+.rail{position:absolute;display:flex;flex-direction:column;align-items:center;border-radius:22px;padding:7px 4px}
+#left{left:6px;top:6px}
+#right{right:6px;top:0;padding:8px 3px}
+.rb{width:44px;height:48px;display:grid;place-items:center;border-radius:14px;color:#e9d7ff;position:relative}
+.rb.on{background:linear-gradient(135deg,rgba(168,91,255,.55),rgba(90,40,200,.4));box-shadow:0 0 12px rgba(168,91,255,.7)}
+#right .rb{width:58px;height:56px;display:flex;flex-direction:column;gap:2px;align-items:center;justify-content:center;font-size:11px;font-weight:500;border-radius:12px}
+#right .rb svg{width:26px;height:26px}
+.rb:active,.chip:active,#mic:active{transform:scale(.94)}
+/* bottom stack */
+#bottom{padding:0 10px 8px 10px;display:flex;flex-direction:column;gap:8px;pointer-events:none}
+#bubble{display:flex;align-items:flex-start;gap:12px;border-radius:26px;padding:12px 16px;max-height:24vh;overflow:hidden}
+#wave{display:flex;gap:3px;align-items:center;height:30px;flex:none;margin-top:3px}
+#wave i{display:block;width:3px;border-radius:2px;background:#c58bff;box-shadow:0 0 6px #a85bff}
+#btext{flex:1;overflow-y:auto;max-height:calc(24vh - 24px);font-size:15px;line-height:1.35;white-space:pre-wrap;word-break:break-word;-webkit-overflow-scrolling:touch}
+#chips{display:flex;gap:5px}
+.chip{flex:1;display:flex;align-items:center;justify-content:center;gap:5px;height:44px;border-radius:16px;font-size:12px;font-weight:600;padding:0 2px;color:#f1e4ff;white-space:nowrap;min-width:0}
+.chip svg{width:17px;height:17px;flex:none}
+#rgbdot{width:19px;height:19px;border-radius:50%;background:conic-gradient(#f44,#fa0,#ee3,#3d6,#3bf,#94f,#f4a,#f44);flex:none}
+#microw{display:flex;align-items:center;justify-content:center;gap:8px;height:70px}
+.bars{display:flex;align-items:center;gap:3px;height:48px;flex:1;justify-content:center}
+.bars i{display:block;width:3px;border-radius:2px;background:linear-gradient(#e0b8ff,#9a4dff)}
+#mic{width:66px;height:66px;border-radius:50%;display:grid;place-items:center;flex:none;background:radial-gradient(circle at 50% 35%,#6a2cff,#2a0f6e);border:3px solid #b57bff;box-shadow:0 0 22px #8a3cff,0 0 0 5px rgba(168,91,255,.25)}
+#mic svg{width:32px;height:32px;stroke:#fff}
+#mic.live{animation:pulse 1s infinite}
+@keyframes pulse{50%{box-shadow:0 0 34px #c58bff,0 0 0 11px rgba(168,91,255,.35)}}
+#inrow{display:flex;gap:8px;align-items:center;border-radius:28px;padding:5px 5px 5px 18px}
+#q{flex:1;min-width:0;background:none;border:0;outline:0;color:#fff;font-size:16px;height:40px}
+#q::placeholder{color:#bda5d8}
+#send{width:46px;height:40px;border-radius:20px;display:grid;place-items:center;background:linear-gradient(135deg,#7a3cff,#4a28d8);flex:none;box-shadow:0 0 12px rgba(120,60,255,.7)}
+#send svg{stroke:#fff;fill:#fff;width:22px;height:22px}
+</style></head>
+<body>
+<div id="info"></div>
+<div id="hud">
+ <div id="top">
+  <div id="logo"><svg viewBox="0 0 24 24"><path d="M12 2l2.2 6.3L21 10l-6.8 1.7L12 18l-2.2-6.3L3 10l6.8-1.7z"/><path d="M19 16l.7 2 2 .7-2 .7-.7 2-.7-2-2-.7 2-.7z"/></svg>LAIBA AI 3D</div>
+  <div id="ver" class="glass">V30</div>
+  <div id="sp"></div>
+  <div id="status" class="glass"><span id="dot"></span><span id="stext">Ready</span></div>
+  <button id="gear" class="glass" onclick="call('openSettings')"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button>
+ </div>
+ <div id="sub"></div>
+ <div id="mid">
+  <div id="left" class="rail glass">
+   <button class="rb on" onclick="feat('home')"><svg viewBox="0 0 24 24"><path d="M3 11l9-8 9 8v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1z"/></svg></button>
+   <button class="rb" onclick="feat('sparkle')"><svg viewBox="0 0 24 24"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/></svg></button>
+   <button class="rb" onclick="feat('mic')"><svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></button>
+   <button class="rb" onclick="feat('avatar')"><svg viewBox="0 0 24 24"><path d="M12 2l9 5v10l-9 5-9-5V7z"/><path d="M12 12l9-5M12 12L3 7M12 12v10"/></svg></button>
+   <button class="rb" onclick="feat('tools')"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><rect x="14" y="14" width="7" height="7" rx="2"/></svg></button>
+  </div>
+  <div id="right" class="rail glass">
+   <button class="rb" onclick="feat('chat')"><svg viewBox="0 0 24 24"><path d="M4 5h16v11H9l-5 4z"/><path d="M8.5 10.5h.01M12 10.5h.01M15.5 10.5h.01"/></svg>AI Chat</button>
+   <button class="rb" onclick="feat('vision')"><svg viewBox="0 0 24 24"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>Vision</button>
+   <button class="rb" onclick="feat('image')"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="3"/><circle cx="9" cy="10" r="1.6"/><path d="M4 18l5-5 4 4 3-3 4 4"/></svg>Image</button>
+   <button class="rb" onclick="feat('video')"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M10 8.5l5 3.5-5 3.5z"/></svg>Video</button>
+   <button class="rb" id="b-code" onclick="feat('code')"><svg viewBox="0 0 24 24"><path d="M8 7l-5 5 5 5M16 7l5 5-5 5M14 5l-4 14"/></svg>Code</button>
+   <button class="rb" onclick="feat('tools')"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><rect x="14" y="14" width="7" height="7" rx="2"/></svg>Tools</button>
+  </div>
+ </div>
+ <div id="bottom">
+  <div id="bubble" class="glass"><div id="wave"></div><div id="btext">Hi! Ask me anything, or tell me what to do on your phone. 💜</div></div>
+  <div id="chips">
+   <button class="chip glass" onclick="cmd('full')"><svg viewBox="0 0 24 24"><circle cx="12" cy="7" r="4"/><path d="M4 21c0-4.5 3.5-8 8-8s8 3.5 8 8z"/></svg>Full View</button>
+   <button class="chip glass" onclick="cmd('face')"><svg viewBox="0 0 24 24"><path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3"/><path d="M9 10v1M15 10v1M9 15c1.5 1.5 4.5 1.5 6 0"/></svg>Face</button>
+   <button class="chip glass" onclick="cmd('wave')"><svg viewBox="0 0 24 24"><path d="M8 12V5.5a1.5 1.5 0 0 1 3 0V11M11 11V4a1.5 1.5 0 0 1 3 0v7M14 11V5.5a1.5 1.5 0 0 1 3 0V13M17 9.5a1.5 1.5 0 0 1 3 0V15a7 7 0 0 1-7 7h-1a6 6 0 0 1-5-3l-3-5a1.5 1.5 0 0 1 2.5-1.6L8 15"/></svg>Wave</button>
+   <button class="chip glass" onclick="cmd('dance')"><svg viewBox="0 0 24 24"><path d="M9 18V6l11-2v12"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="17.5" cy="16" r="2.5"/></svg>Dance</button>
+   <button class="chip glass" onclick="cmd('rgb')"><span id="rgbdot"></span>RGB</button>
+  </div>
+  <div id="microw">
+   <div class="bars" id="barsL"></div>
+   <button id="mic" onclick="micTap()"><svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3" style="fill:#fff"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></button>
+   <div class="bars" id="barsR"></div>
+  </div>
+  <div id="inrow" class="glass">
+   <input id="q" type="text" enterkeyhint="send" autocomplete="off" placeholder="Type a command...">
+   <button id="send" onclick="sendQ()"><svg viewBox="0 0 24 24"><path d="M3 11.5L21 3l-8 18-2.5-7.5z"/></svg></button>
+  </div>
+ </div>
+</div>
+<script src="three.min.js"></script>
+<script>
+(function(){var m='portrait';try{if(window.Android&&Android.getMode)m=Android.getMode()||'portrait'}catch(e){}
+ var q=(location.search.match(/mode=(\w+)/)||[])[1];if(q)m=q;
+ var list=m==='glb'?['OrbitControls.js','OfflineGLBLoader.js','viewer.js']:['portrait.js'];
+ list.forEach(function(f){document.write('<script src="'+f+'"><\/script>')});})();
+</script>
+<script>
+(function(){
+ function call(n,a,b){try{if(window.Android&&Android[n]){return b===undefined?(a===undefined?Android[n]():Android[n](a)):Android[n](a,b);}}catch(e){}}
+ window.call=call;
+ var q=document.getElementById('q'),btext=document.getElementById('btext');
+ window.feat=function(n){call('feature',n,q.value.trim());
+   document.querySelectorAll('#left .rb').forEach(function(b){b.classList.remove('on')});
+   if(n==='home'){document.querySelector('#left .rb').classList.add('on')}};
+ window.cmd=function(c){if(window.Laiba)Laiba.command(c)};
+ window.sendQ=function(){var t=q.value.trim();if(!t)return;q.value='';q.blur();call('send',t)};
+ q.addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();sendQ()}});
+ var listening=false;
+ window.micTap=function(){if(listening||speaking){call('stopAll');return}call('mic')};
+ // waveform bars
+ function mk(id,n){var el=document.getElementById(id),a=[];for(var i=0;i<n;i++){var b=document.createElement('i');el.appendChild(b);a.push(b)}return a}
+ var L=mk('barsL',16),R=mk('barsR',16),W=mk('wave',5),lvl=0,speaking=false,t0=0;
+ function frame(t){
+  var k=listening?lvl:(speaking?.55:0);
+  function set(arr,rev){for(var i=0;i<arr.length;i++){var d=(rev?arr.length-1-i:i)/arr.length;var env=.25+.75*(1-Math.abs(d-.8));
+    var base=4+3*Math.sin(t/700+i);var amp=k*(10+34*env)*(.5+.5*Math.abs(Math.sin(t/120+i*1.7)));arr[i].style.height=(base+amp)+'px';arr[i].style.opacity=.45+.55*env}}
+  set(L,false);set(R,true);
+  for(var i=0;i<W.length;i++){W[i].style.height=(8+((speaking||listening)?16*Math.abs(Math.sin(t/140+i*1.3)):10*Math.abs(Math.sin(i*1.9+1))))+'px'}
+  lvl*=.92;requestAnimationFrame(frame)}
+ requestAnimationFrame(frame);
+ var dot=document.getElementById('dot'),stext=document.getElementById('stext');
+ window.HUD={
+  setStatus:function(s){stext.textContent=s;var bad=/error|denied|stopped/i.test(s),busy=/think|work|listen|speak/i.test(s);
+    dot.style.background=bad?'#ff5252':busy?'#ffb84d':'#35e05a';dot.style.boxShadow='0 0 8px '+dot.style.background},
+  setSub:function(s){document.getElementById('sub').textContent=s},
+  setReply:function(s){btext.textContent=s;btext.scrollTop=0},
+  setInput:function(s){q.value=s},
+  focusInput:function(){q.focus()},
+  level:function(v){lvl=Math.max(lvl,Number(v)||0)},
+  listening:function(b){listening=!!b;document.getElementById('mic').classList.toggle('live',listening||speaking)},
+  speaking:function(b){speaking=!!b;if(speaking)HUD.setStatus('Speaking…');else if(stext.textContent==='Speaking…')HUD.setStatus('Ready');document.getElementById('mic').classList.toggle('live',listening||speaking)},
+  setActive:function(n){var b=document.getElementById('b-'+n);if(b)b.classList.toggle('on')}
+ };
+})();
+</script>
+</body></html>

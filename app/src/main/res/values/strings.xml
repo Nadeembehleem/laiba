@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">Laiba</string>
+    <string name="svc_desc">Lets Laiba read the screen and tap, type and scroll for you when you ask it to do a task.</string>
+</resources>
