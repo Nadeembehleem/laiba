@@ -1,0 +1,43 @@
+name: LAIBA V29 Cloud Avatar Prototype
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'tools/create_laiba.py'
+      - '.github/workflows/laiba-avatar-builder.yml'
+permissions:
+  contents: read
+jobs:
+  build-avatar:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Blender
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y blender python3-numpy
+          blender --version
+      - name: Generate GLB
+        run: blender --background --factory-startup --python tools/create_laiba.py
+      - name: Validate GLB header and structure
+        run: |
+          python3 - <<'PY'
+          import struct, json, pathlib
+          p=pathlib.Path('tools/laiba_human_prototype.glb')
+          data=p.read_bytes()
+          assert data[:4]==b'glTF' and len(data)>100, 'Not a valid GLB header'
+          version,length=struct.unpack_from('<II',data,4)
+          assert version==2 and length==len(data), 'Invalid GLB length'
+          chunk_len,chunk_type=struct.unpack_from('<II',data,12)
+          assert chunk_type==0x4E4F534A
+          doc=json.loads(data[20:20+chunk_len])
+          assert doc.get('meshes') and doc.get('animations'), 'Missing meshes or animations'
+          print('Validated:',p,'meshes:',len(doc['meshes']),'animations:',len(doc['animations']))
+          PY
+      - name: Upload GLB artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: laiba-v29-prototype-glb
+          path: tools/laiba_human_prototype.glb
+          if-no-files-found: error

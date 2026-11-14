@@ -23,3 +23,14 @@ Not compiled on a device by the author (no Android SDK available). Send the Acti
 ## Voice (V30.2)
 Gear -> Voice: pick any installed phone voice, adjust pitch/speed, or enable "Natural voice with Gemini speech" (Gemini provider only;
 voices Kore/Aoede/Leda/Zephyr/Puck/Charon). If Gemini speech fails, LAIBA falls back to the phone voice automatically.
+
+## Free AI providers (V31)
+Settings -> Brain: pick a provider, paste its key. Supported: Gemini, Groq, Cerebras, OpenRouter, Mistral, GitHub Models,
+NVIDIA NIM, SambaNova, Hugging Face, DeepSeek, OpenAI, or any OpenAI-compatible endpoint. Save keys for several; when one hits
+its limit LAIBA switches to the next automatically ("Answered by ..." shows which one replied).
+Image/screen vision works with Gemini, GitHub Models and OpenAI keys only.
+
+## ElevenLabs voice (V31.1)
+Settings -> Voice -> Voice engine -> ElevenLabs. Paste your ElevenLabs API key, pick a voice ("Pick from my ElevenLabs voices") and a model
+(flash = cheaper, multilingual_v2 = best quality, both speak Hindi). Free plan ~10k characters/month; long answers are trimmed.
+If ElevenLabs fails (quota, key, network) LAIBA falls back to the phone voice automatically.

@@ -87,12 +87,16 @@ public class MainActivity extends Activity {
     String pendingImageQuestion = "";
 
     EditText fKey, fModel, fEndpoint;
+    String editingId = "gemini";
+    CheckBox cFallback;
     Spinner sProvider, sLang;
     CheckBox cSpeak, cPhone, cVision, cGround;
     TextView tAcc, tModelInfo, tVoice;
     SeekBar sbPitch, sbRate;
-    CheckBox cNatural;
-    Spinner sNatVoice;
+    Spinner sNatVoice, sEngine, sElModel;
+    EditText fElKey, fElVoice;
+    static final String[] ENGINES = {"phone", "gemini", "eleven"};
+    static final String[] EL_MODELS = {"eleven_flash_v2_5", "eleven_multilingual_v2"};
     volatile int speakGen = 0;
     static final String[] NAT_VOICES = {"Kore", "Aoede", "Leda", "Zephyr", "Puck", "Charon"};
 
@@ -109,6 +113,7 @@ public class MainActivity extends Activity {
         cur = this;
         appCtx = getApplicationContext();
         prefs = getSharedPreferences("laiba", MODE_PRIVATE);
+        Providers.migrate(prefs);
         getWindow().setStatusBarColor(BG);
         getWindow().setNavigationBarColor(Color.BLACK);
 
@@ -275,6 +280,7 @@ public class MainActivity extends Activity {
                     history.add(new Llm.Msg("assistant", ans, null));
                     while (history.size() > 24) history.remove(0);
                 }
+                if (!llm.used.isEmpty()) { final String via = llm.used; ui.post(() -> hud("setSub", "Answered by " + via)); }
                 finish(ans, false);
             } catch (Exception ex) {
                 String m = ex.getMessage() == null ? ex.getClass().getSimpleName() : ex.getMessage();
@@ -296,7 +302,7 @@ public class MainActivity extends Activity {
         ui.post(() -> {
             hud("setReply", ans);
             hud("setStatus", error ? "Error" : "Ready");
-            speak(ans);
+            speak(error ? "Sorry, something went wrong. Please check the message on the screen." : ans);
         });
     }
 
@@ -320,8 +326,23 @@ public class MainActivity extends Activity {
     void speak(String text) {
         String t = cleanForSpeech(text);
         if (!flag("speak", true) || t.isEmpty()) { js("Laiba.speak(" + Math.min(15000, 600 + text.length() * 45) + ")"); return; }
-        if (flag("natural", false) && "3".equals(get("provider", "0")) && !get("key", "").isEmpty()) { speakNatural(t); return; }
+        String eng = engine();
+        if (eng.equals("eleven") && !get("elKey", "").trim().isEmpty()) { speakCloud(t, true); return; }
+        if (eng.equals("gemini") && !Providers.key(prefs, "gemini").isEmpty()) { speakCloud(t, false); return; }
         speakLocal(t);
+    }
+
+    String engine() {
+        String e = get("engine", "");
+        if (e.isEmpty()) e = flag("natural", false) ? "gemini" : "phone";
+        return e;
+    }
+
+    static String cut(String t, int max) {
+        if (t.length() <= max) return t;
+        String h = t.substring(0, max);
+        int k = Math.max(Math.max(h.lastIndexOf('.'), h.lastIndexOf('?')), Math.max(h.lastIndexOf('!'), h.lastIndexOf('\u0964')));
+        return k > max / 2 ? h.substring(0, k + 1) : h;
     }
 
     void speakLocal(String t) {
@@ -329,21 +350,24 @@ public class MainActivity extends Activity {
         else js("Laiba.speak(" + Math.min(15000, 600 + t.length() * 45) + ")");
     }
 
-    void speakNatural(String full) {
-        final String t = full.length() > 1200 ? full.substring(0, 1200) : full;
+    void speakCloud(String full, boolean eleven) {
+        final String t = eleven ? cut(full, 700) : cut(full, 1200);   // ElevenLabs bills per character: keep it short
         final int gen = ++speakGen;
-        final String key = get("key", "").trim(), voice = get("natVoice", "Kore");
+        final String key = eleven ? get("elKey", "").trim() : Providers.key(prefs, "gemini");
+        final String voice = eleven ? get("elVoice", ElevenTts.DEFAULT_VOICE) : get("natVoice", "Kore");
+        final String model = eleven ? get("elModel", EL_MODELS[0]) : "gemini-2.5-flash-preview-tts";
+        final String name = eleven ? "ElevenLabs" : "Gemini voice";
         if (tts != null) tts.stop();
         new Thread(() -> {
             try {
-                byte[] pcm = GeminiTts.synth(key, "gemini-2.5-flash-preview-tts", voice, t);
+                byte[] pcm = eleven ? ElevenTts.synth(key, voice, model, t) : GeminiTts.synth(key, model, voice, t);
                 if (gen != speakGen) return;
                 ui.post(() -> { js("Laiba.speak(" + (GeminiTts.durationMs(pcm) + 400) + ")"); hud("speaking", "true"); });
                 GeminiTts.play(pcm);
                 ui.post(() -> { if (gen == speakGen) { js("Laiba.stopSpeaking()"); hud("speaking", "false"); } });
             } catch (Exception e) {
                 String m = e.getMessage() == null ? "error" : e.getMessage();
-                ui.post(() -> { if (gen == speakGen) { hud("setSub", "Natural voice unavailable (" + m + ") — using phone voice"); speakLocal(t); } });
+                ui.post(() -> { if (gen == speakGen) { hud("setSub", name + " unavailable (" + m + ") — using phone voice"); speakLocal(t); } });
             }
         }).start();
     }
@@ -627,24 +651,37 @@ public class MainActivity extends Activity {
 
         btn("← Back to LAIBA", this::closeSettings);
         label("Brain (AI provider)", 20, Color.WHITE);
+        label("Add keys for several free providers. LAIBA switches to the next one automatically when a limit is reached.", 12, 0xffb6a0cb);
         sProvider = new Spinner(this);
-        sProvider.setAdapter(new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item, new String[]{"DeepSeek", "OpenAI", "Custom OpenAI-compatible", "Google Gemini"}));
-        sProvider.setSelection(Math.min(3, Math.max(0, Integer.parseInt(get("provider", "0")))));
+        String[] pn = new String[Providers.ALL.length];
+        for (int i = 0; i < pn.length; i++) pn[i] = Providers.ALL[i].name;
+        sProvider.setAdapter(new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item, pn));
+        editingId = Providers.activeId(prefs);
+        sProvider.setSelection(Providers.indexOf(editingId));
         sbox.addView(sProvider, new LinearLayout.LayoutParams(-1, -2));
-        fKey = field("API key", get("key", ""), true);
-        fModel = field("Model", get("model", "deepseek-chat"), false);
-        fEndpoint = field("API base URL", get("endpoint", "https://api.deepseek.com"), false);
+        fKey = field("API key for this provider", "", true);
+        fModel = field("Model", "", false);
+        fEndpoint = field("API base URL", "", false);
+        loadProviderFields(editingId);
         sProvider.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
             @Override public void onNothingSelected(AdapterView<?> a) { }
             @Override public void onItemSelected(AdapterView<?> a, View v, int pos, long id) {
-                if (pos == 3 && !get("provider", "0").equals("3")) { fModel.setText("gemini-2.5-flash"); fEndpoint.setText("https://generativelanguage.googleapis.com/v1beta"); }
-                else if (pos == 0 && fModel.getText().toString().startsWith("gemini-")) { fModel.setText("deepseek-chat"); fEndpoint.setText("https://api.deepseek.com"); }
-                else if (pos == 1 && (fModel.getText().toString().startsWith("gemini-") || fModel.getText().toString().startsWith("deepseek"))) { fModel.setText("gpt-4o-mini"); fEndpoint.setText("https://api.openai.com/v1"); }
+                String nid = Providers.ALL[pos].id;
+                if (nid.equals(editingId)) return;
+                saveProviderFields(editingId);
+                editingId = nid;
+                loadProviderFields(nid);
             }
         });
-        btn("Load available Gemini models", this::loadGeminiModels);
-        tModelInfo = label("Gemini: tap the button above to list models your key supports.", 13, 0xffcfa9ff);
-        cGround = check("Use Google Search for up-to-date answers (Gemini only)", flag("grounding", true));
+        btn("Get a free key for this provider (opens browser)", () -> {
+            Providers.P q = Providers.find(editingId);
+            if (q == null || q.keyUrl.isEmpty()) { toast("No website for a custom provider"); return; }
+            try { startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(q.keyUrl))); } catch (Exception e) { toast("No browser found"); }
+        });
+        btn("Load available models", this::loadModels);
+        tModelInfo = label("Tip: save a key for 2-3 providers (for example Gemini + Groq + OpenRouter) so LAIBA never runs out.", 13, 0xffcfa9ff);
+        cFallback = check("Auto-switch to my other saved providers when one hits its limit", flag("fallback", true));
+        cGround = check("Use Google Search for up-to-date answers (Gemini only, has its own small limit)", flag("grounding", true));
         cVision = check("Let the AI see screenshots while controlling the phone (sends screen images to your AI provider)", flag("vision", false));
 
         label("Language", 18, Color.WHITE);
@@ -667,11 +704,28 @@ public class MainActivity extends Activity {
         sbRate.setMax(100);
         sbRate.setProgress(Math.round((Float.parseFloat(get("rate", "1.0")) - 0.5f) * 100f / 1.5f));
         sbox.addView(sbRate, new LinearLayout.LayoutParams(-1, -2));
-        cNatural = check("Natural voice with Gemini speech (Gemini provider only, uses your quota)", flag("natural", false));
+        label("Voice engine", 15, Color.WHITE);
+        sEngine = new Spinner(this);
+        sEngine.setAdapter(new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item, new String[]{"Phone voice (offline, free)", "Gemini speech (natural, needs Gemini key)", "ElevenLabs (most natural, needs ElevenLabs key)"}));
+        sEngine.setSelection(Math.max(0, Arrays.asList(ENGINES).indexOf(engine())));
+        sbox.addView(sEngine, new LinearLayout.LayoutParams(-1, -2));
+        label("Gemini speech voice", 13, 0xffcfa9ff);
         sNatVoice = new Spinner(this);
         sNatVoice.setAdapter(new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item, NAT_VOICES));
         sNatVoice.setSelection(Math.max(0, Arrays.asList(NAT_VOICES).indexOf(get("natVoice", "Kore"))));
         sbox.addView(sNatVoice, new LinearLayout.LayoutParams(-1, -2));
+        label("ElevenLabs", 15, Color.WHITE);
+        fElKey = field("ElevenLabs API key", get("elKey", ""), true);
+        fElVoice = field("ElevenLabs voice ID", get("elVoice", ElevenTts.DEFAULT_VOICE), false);
+        sElModel = new Spinner(this);
+        sElModel.setAdapter(new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item, new String[]{"eleven_flash_v2_5 (cheaper, fast)", "eleven_multilingual_v2 (best quality)"}));
+        sElModel.setSelection(Math.max(0, Arrays.asList(EL_MODELS).indexOf(get("elModel", EL_MODELS[0]))));
+        sbox.addView(sElModel, new LinearLayout.LayoutParams(-1, -2));
+        btn("Pick from my ElevenLabs voices", this::chooseElevenVoice);
+        btn("Get a free ElevenLabs key (opens browser)", () -> {
+            try { startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse("https://elevenlabs.io/app/settings/api-keys"))); } catch (Exception e) { toast("No browser found"); }
+        });
+        label("Free plan: about 10,000 characters a month and only your own/default voices through the API. Long answers are shortened to save credits.", 12, 0xffb6a0cb);
         btn("Test voice", () -> { applyVoiceFromUi(); speak("Hello! Main Laiba hoon. Aap kaise hain?"); });
 
         label("Phone control", 20, Color.WHITE);
@@ -694,11 +748,33 @@ public class MainActivity extends Activity {
     void saveVoiceUi() {
         save("pitch", String.valueOf(0.5f + sbPitch.getProgress() * 1.5f / 100f));
         save("rate", String.valueOf(0.5f + sbRate.getProgress() * 1.5f / 100f));
-        save("natural", cNatural.isChecked() ? "true" : "false");
+        save("engine", ENGINES[Math.max(0, sEngine.getSelectedItemPosition())]);
+        save("elKey", fElKey.getText().toString().trim());
+        String ev = fElVoice.getText().toString().trim();
+        save("elVoice", ev.isEmpty() ? ElevenTts.DEFAULT_VOICE : ev);
+        save("elModel", EL_MODELS[Math.max(0, sElModel.getSelectedItemPosition())]);
         save("natVoice", NAT_VOICES[Math.max(0, sNatVoice.getSelectedItemPosition())]);
         save("speak", cSpeak.isChecked() ? "true" : "false");
-        save("provider", "" + sProvider.getSelectedItemPosition());
-        save("key", fKey.getText().toString().trim());
+    }
+
+    void chooseElevenVoice() {
+        final String key = fElKey.getText().toString().trim();
+        if (key.isEmpty()) { toast("Enter your ElevenLabs API key first"); return; }
+        toast("Loading voices…");
+        new Thread(() -> {
+            try {
+                final java.util.List<String[]> list = ElevenTts.voices(key);
+                ui.post(() -> {
+                    if (list.isEmpty()) { toast("No voices found on this account"); return; }
+                    final String[] names = new String[list.size()];
+                    for (int i = 0; i < names.length; i++) names[i] = list.get(i)[0];
+                    new AlertDialog.Builder(this).setTitle("Pick an ElevenLabs voice").setItems(names, (d, n) -> {
+                        fElVoice.setText(list.get(n)[1]);
+                        toast("Selected " + names[n]);
+                    }).setNegativeButton("Cancel", null).show();
+                });
+            } catch (Exception e) { String m = e.getMessage(); ui.post(() -> toast("Voice list failed: " + m)); }
+        }).start();
     }
 
     void applyVoiceFromUi() { saveVoiceUi(); applyVoice(); }
@@ -730,10 +806,9 @@ public class MainActivity extends Activity {
     }
 
     void closeSettings() {
-        save("provider", "" + sProvider.getSelectedItemPosition());
-        save("key", fKey.getText().toString().trim());
-        save("model", fModel.getText().toString().trim());
-        save("endpoint", fEndpoint.getText().toString().trim());
+        saveProviderFields(editingId);
+        save("active", editingId);
+        save("fallback", cFallback.isChecked() ? "true" : "false");
         save("lang", new String[]{"hi-IN", "en-IN", "ur-PK"}[Math.max(0, sLang.getSelectedItemPosition())]);
         save("speak", cSpeak.isChecked() ? "true" : "false");
         save("phone", cPhone.isChecked() ? "true" : "false");
@@ -744,10 +819,61 @@ public class MainActivity extends Activity {
         settingsView.setVisibility(View.GONE);
     }
 
-    void loadGeminiModels() {
-        if (sProvider.getSelectedItemPosition() != 3) { tModelInfo.setText("Select Google Gemini first."); return; }
+    void loadProviderFields(String id) {
+        fKey.setText(Providers.key(prefs, id));
+        fModel.setText(Providers.model(prefs, id));
+        fEndpoint.setText(Providers.base(prefs, id));
+    }
+
+    void saveProviderFields(String id) {
+        save("key_" + id, fKey.getText().toString().trim());
+        save("model_" + id, fModel.getText().toString().trim());
+        save("endpoint_" + id, fEndpoint.getText().toString().trim());
+    }
+
+    void loadModels() {
         final String token = fKey.getText().toString().trim();
-        if (token.isEmpty()) { tModelInfo.setText("Enter your Gemini API key first."); return; }
+        if (token.isEmpty()) { tModelInfo.setText("Enter the API key for this provider first."); return; }
+        if (editingId.equals("gemini")) { loadGeminiModels(token); return; }
+        if (editingId.equals("github")) { tModelInfo.setText("GitHub Models: use ids like openai/gpt-4o-mini or meta/llama-3.3-70b-instruct (see github.com/marketplace/models)."); return; }
+        final String base = fEndpoint.getText().toString().trim();
+        if (!base.startsWith("https://")) { tModelInfo.setText("API base URL must start with https://"); return; }
+        final boolean freeOnly = editingId.equals("openrouter");
+        tModelInfo.setText("Loading models…");
+        new Thread(() -> {
+            HttpURLConnection c = null;
+            try {
+                c = (HttpURLConnection) new URL(Llm.modelsUrl(base)).openConnection();
+                c.setConnectTimeout(12000);
+                c.setReadTimeout(20000);
+                c.setRequestProperty("Authorization", "Bearer " + token);
+                int code = c.getResponseCode();
+                String raw = Llm.read(c, code);
+                if (code != 200) throw new Exception("HTTP " + code + ": " + Llm.detail(raw));
+                JSONArray data = new JSONObject(raw).optJSONArray("data");
+                ArrayList<String> names = new ArrayList<>();
+                if (data != null) for (int i = 0; i < data.length(); i++) {
+                    String id = data.getJSONObject(i).optString("id", "");
+                    if (id.isEmpty() || (freeOnly && !id.endsWith(":free"))) continue;
+                    names.add(id);
+                }
+                java.util.Collections.sort(names);
+                while (names.size() > 150) names.remove(names.size() - 1);
+                ui.post(() -> {
+                    if (names.isEmpty()) { tModelInfo.setText("No models returned."); return; }
+                    tModelInfo.setText("Models available: " + names.size());
+                    String[] opts = names.toArray(new String[0]);
+                    new AlertDialog.Builder(this).setTitle("Select model").setItems(opts, (d, w) -> {
+                        fModel.setText(opts[w]);
+                        tModelInfo.setText("Selected: " + opts[w]);
+                    }).setNegativeButton("Cancel", null).show();
+                });
+            } catch (Exception ex) { String m = ex.getMessage(); ui.post(() -> tModelInfo.setText("Model list failed: " + m)); }
+            finally { if (c != null) c.disconnect(); }
+        }).start();
+    }
+
+    void loadGeminiModels(final String token) {
         tModelInfo.setText("Loading models…");
         new Thread(() -> {
             HttpURLConnection c = null;
